@@ -21,9 +21,9 @@ conda activate ${ENV_NAME}
 
 echo ""
 echo "============================================================"
-echo "Installing PyTorch (CUDA 12.1)"
+echo "Installing PyTorch (CUDA 12.6, compatible with CUDA 12.8 driver)"
 echo "============================================================"
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 
 echo ""
 echo "============================================================"
