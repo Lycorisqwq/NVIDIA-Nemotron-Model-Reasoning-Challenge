@@ -5,3 +5,5 @@ datasets>=2.18.0
 pandas>=2.0.0
 accelerate>=0.28.0
 safetensors>=0.4.0
+causal-conv1d>=1.4.0
+mamba-ssm>=2.2.0
