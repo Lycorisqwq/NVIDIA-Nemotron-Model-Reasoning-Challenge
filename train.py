@@ -81,21 +81,33 @@ for name, mod in list(sys.modules.items()):
 
 # Pre-register mock mamba_ssm so model code can import rmsnorm_fn from it
 import types
+import importlib
 
-_mamba_ssm = types.ModuleType("mamba_ssm")
-_mamba_ops = types.ModuleType("mamba_ssm.ops")
-_mamba_triton = types.ModuleType("mamba_ssm.ops.triton")
-_mamba_ln = types.ModuleType("mamba_ssm.ops.triton.layernorm_gated")
+def _make_mock_module(name):
+    mod = types.ModuleType(name)
+    mod.__spec__ = importlib.machinery.ModuleSpec(name, None)
+    mod.__path__ = []  # mark as package so sub-imports work
+    return mod
+
+_mamba_ssm = _make_mock_module("mamba_ssm")
+_mamba_ssm.__version__ = "2.2.2"  # fake version for is_mamba_2_ssm_available()
+_mamba_ops = _make_mock_module("mamba_ssm.ops")
+_mamba_triton = _make_mock_module("mamba_ssm.ops.triton")
+_mamba_ln = _make_mock_module("mamba_ssm.ops.triton.layernorm_gated")
 _mamba_ln.rmsnorm_fn = _pure_rmsnorm_fn
 
 _mamba_ssm.ops = _mamba_ops
 _mamba_ops.triton = _mamba_triton
 _mamba_triton.layernorm_gated = _mamba_ln
 
-sys.modules["mamba_ssm"] = _mamba_ssm
-sys.modules["mamba_ssm.ops"] = _mamba_ops
-sys.modules["mamba_ssm.ops.triton"] = _mamba_triton
-sys.modules["mamba_ssm.ops.triton.layernorm_gated"] = _mamba_ln
+for _name, _mod in [
+    ("mamba_ssm", _mamba_ssm),
+    ("mamba_ssm.ops", _mamba_ops),
+    ("mamba_ssm.ops.triton", _mamba_triton),
+    ("mamba_ssm.ops.triton.layernorm_gated", _mamba_ln),
+]:
+    sys.modules[_name] = _mod
+
 print("Registered mock mamba_ssm with pure PyTorch rmsnorm_fn")
 
 # ============================================================
