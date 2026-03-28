@@ -2,6 +2,6 @@ transformers>=4.40.0
 peft>=0.10.0
 trl>=0.8.0
 datasets>=2.18.0
-polars>=0.20.0
+pandas>=2.0.0
 accelerate>=0.28.0
 safetensors>=0.4.0

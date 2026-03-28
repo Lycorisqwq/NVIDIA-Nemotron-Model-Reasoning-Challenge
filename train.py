@@ -43,7 +43,7 @@ ZIP_PATH = args.zip_path
 # ============================================================
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-import polars as pl
+import pandas as pd
 import torch
 import torch.nn.functional as F
 from datasets import Dataset
@@ -96,11 +96,11 @@ os.makedirs(os.path.dirname(ZIP_PATH) if os.path.dirname(ZIP_PATH) else ".", exi
 # 4. Load Data
 # ============================================================
 print(f"\nLoading training data from {DATA_PATH} ...")
-train_df = pl.read_csv(DATA_PATH)
+train_df = pd.read_csv(DATA_PATH)
 print(f"Training samples: {len(train_df)}")
-print(f"Columns: {train_df.columns}")
+print(f"Columns: {list(train_df.columns)}")
 
-hf_dataset = Dataset.from_pandas(train_df.to_pandas())
+hf_dataset = Dataset.from_pandas(train_df)
 
 # ============================================================
 # 5. Build Training Prompts
