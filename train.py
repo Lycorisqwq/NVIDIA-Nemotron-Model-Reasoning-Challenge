@@ -79,6 +79,25 @@ for name, mod in list(sys.modules.items()):
         mod.rmsnorm_fn = _pure_rmsnorm_fn
         print(f"Patched rmsnorm_fn in {name}")
 
+# Pre-register mock mamba_ssm so model code can import rmsnorm_fn from it
+import types
+
+_mamba_ssm = types.ModuleType("mamba_ssm")
+_mamba_ops = types.ModuleType("mamba_ssm.ops")
+_mamba_triton = types.ModuleType("mamba_ssm.ops.triton")
+_mamba_ln = types.ModuleType("mamba_ssm.ops.triton.layernorm_gated")
+_mamba_ln.rmsnorm_fn = _pure_rmsnorm_fn
+
+_mamba_ssm.ops = _mamba_ops
+_mamba_ops.triton = _mamba_triton
+_mamba_triton.layernorm_gated = _mamba_ln
+
+sys.modules["mamba_ssm"] = _mamba_ssm
+sys.modules["mamba_ssm.ops"] = _mamba_ops
+sys.modules["mamba_ssm.ops.triton"] = _mamba_triton
+sys.modules["mamba_ssm.ops.triton.layernorm_gated"] = _mamba_ln
+print("Registered mock mamba_ssm with pure PyTorch rmsnorm_fn")
+
 # ============================================================
 # 3. Hyperparameters
 # ============================================================
