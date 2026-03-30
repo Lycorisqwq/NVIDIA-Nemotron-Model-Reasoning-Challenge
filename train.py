@@ -31,6 +31,8 @@ parser.add_argument("--output_dir", type=str,
 parser.add_argument("--zip_path", type=str,
                     default="output/submission.zip",
                     help="Path for the submission zip file")
+parser.add_argument("--qlora", action="store_true",
+                    help="Use 4-bit QLoRA to reduce VRAM usage (~15GB vs ~60GB for model weights)")
 args = parser.parse_args()
 
 MODEL_PATH = args.model_path
@@ -47,8 +49,8 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 from datasets import Dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from peft import LoraConfig, get_peft_model, TaskType
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from peft import LoraConfig, get_peft_model, TaskType, prepare_model_for_kbit_training
 from trl import SFTTrainer, SFTConfig
 
 print(f"PyTorch version: {torch.__version__}")
@@ -146,12 +148,29 @@ print(f"Dataset ready: {len(hf_dataset)} examples")
 # 6. Load Model & Apply LoRA
 # ============================================================
 print(f"\nLoading model from {MODEL_PATH} ...")
-model = AutoModelForCausalLM.from_pretrained(
-    MODEL_PATH,
-    device_map={"": 0},
-    trust_remote_code=True,
-    dtype=torch.bfloat16,
-)
+if args.qlora:
+    print("Using QLoRA (4-bit quantization)")
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_use_double_quant=True,
+    )
+    model = AutoModelForCausalLM.from_pretrained(
+        MODEL_PATH,
+        device_map={"": 0},
+        trust_remote_code=True,
+        quantization_config=bnb_config,
+    )
+    model = prepare_model_for_kbit_training(model)
+else:
+    print("Using LoRA (bf16 full precision)")
+    model = AutoModelForCausalLM.from_pretrained(
+        MODEL_PATH,
+        device_map={"": 0},
+        trust_remote_code=True,
+        dtype=torch.bfloat16,
+    )
 model.gradient_checkpointing_enable()
 
 # Patch: disable fast path kernels for stability

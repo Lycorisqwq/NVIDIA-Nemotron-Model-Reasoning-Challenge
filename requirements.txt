@@ -7,3 +7,4 @@ accelerate>=0.28.0
 safetensors>=0.4.0
 causal-conv1d>=1.4.0
 mamba-ssm>=2.2.0
+bitsandbytes>=0.43.0
