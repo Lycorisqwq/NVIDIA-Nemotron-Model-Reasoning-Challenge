@@ -7,6 +7,7 @@ Tailored for A100 80G - Maximize Reasoning Accuracy
 import argparse
 import os
 import gc
+import sys
 import torch
 import zipfile
 import polars as pl
@@ -32,14 +33,37 @@ parser.add_argument("--output_dir", type=str, default="output/adapter")
 parser.add_argument("--zip_path", type=str, default="output/submission.zip")
 args = parser.parse_args()
 
+
+# ============================================================
+#  RMSNorm Fix (pure PyTorch fallback for stability)
+# ============================================================
+def _pure_rmsnorm_fn(x, weight, bias=None, z=None, eps=1e-5,
+                     group_size=None, norm_before_gate=True, upcast=True):
+    dtype = x.dtype
+    if upcast:
+        x = x.float()
+    variance = x.pow(2).mean(-1, keepdim=True)
+    x_normed = x * torch.rsqrt(variance + eps)
+    out = x_normed * weight.float()
+    if bias is not None:
+        out = out + bias.float()
+    if z is not None:
+        out = out * F.silu(z.float())
+    return out.to(dtype)
+
+for name, mod in list(sys.modules.items()):
+    if hasattr(mod, 'rmsnorm_fn'):
+        mod.rmsnorm_fn = _pure_rmsnorm_fn
+        print(f"Patched rmsnorm_fn in {name}")
+
 # ============================================================
 # 1. 超参数配置 (纯 BF16 比较吃显存，参数略微保守)
 # ============================================================
 MAX_SEQ_LEN = 2048     
-LORA_RANK = 64         # 纯 BF16 下，Rank 32 是一个非常稳妥且高效的值
+LORA_RANK = 32         # 纯 BF16 下，Rank 32 是一个非常稳妥且高效的值
 NUM_EPOCHS = 2
-BATCH_SIZE = 1         
-GRAD_ACCUM = 16         # 增加梯度累积，等效 Batch Size = 8
+BATCH_SIZE = 8         
+GRAD_ACCUM = 4         # 增加梯度累积，等效 Batch Size = 8
 LR = 1e-5              # 纯 BF16 的学习率通常比 QLoRA (2e-4) 要设置得低一点，防止过拟合
 
 os.makedirs(args.output_dir, exist_ok=True)
@@ -91,6 +115,8 @@ model, tokenizer = FastLanguageModel.from_pretrained(
     max_seq_length = MAX_SEQ_LEN,
     dtype = torch.bfloat16,    # 强制 BF16
     load_in_4bit = False,      # 关闭 QLoRA，开启纯血 LoRA
+    load_in_8bit = False,
+    unsloth_force_compile = False,
     trust_remote_code = True,
     local_files_only = True,   # 强制离线加载
 )
@@ -106,7 +132,7 @@ model = FastLanguageModel.get_peft_model(
     use_gradient_checkpointing = "unsloth", # 救命稻草：保住最后 20G 显存的关键
     random_state = 3407,
 )
-
+model.gradient_checkpointing_enable()
 model.print_trainable_parameters()
 
 
@@ -145,6 +171,7 @@ training_args = SFTConfig(
     learning_rate = LR, 
     logging_steps = 5,
     bf16 = True,
+    max_grad_norm = 1.0,
     optim = "paged_adamw_8bit", # 模型虽然是 16-bit 的，但优化器状态我们依然用 8-bit 压缩以省显存
     lr_scheduler_type = "cosine",
     warmup_ratio = 0.1,
@@ -153,6 +180,8 @@ training_args = SFTConfig(
     dataset_text_field = "text",
     max_length = MAX_SEQ_LEN,
     packing = False,
+    gradient_checkpointing = True,
+    gradient_checkpointing_kwargs = {"use_reentrant": False},
     dataloader_num_workers = 4,      # 开启多线程加载数据，防止 GPU 等待 CPU 预处理文本
     dataloader_pin_memory = True,    # 开启锁页内存，加速 CPU 到 GPU 的数据传输
 )
