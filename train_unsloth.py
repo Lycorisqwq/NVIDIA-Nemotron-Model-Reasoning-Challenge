@@ -14,6 +14,7 @@ import polars as pl
 import pandas as pd
 from datasets import Dataset
 
+
 # ============================================================
 # 0. 阻断网络请求，强制离线模式 (解决 120s Timeout 报错)
 # ============================================================
@@ -32,7 +33,6 @@ parser.add_argument("--data_path", type=str,
 parser.add_argument("--output_dir", type=str, default="output/adapter")
 parser.add_argument("--zip_path", type=str, default="output/submission.zip")
 args = parser.parse_args()
-
 
 # ============================================================
 #  RMSNorm Fix (pure PyTorch fallback for stability)
